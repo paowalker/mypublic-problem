@@ -1,0 +1,89 @@
+try {
+        $vmResponse = Invoke-RestMethod -URI $vmUri -Headers $Headers -ContentType "application/json" -Method Get -WebSession $session
+        $vms = $vmResponse.data
+        #Write-Host $vms
+        # Display VM details for each node
+        foreach ($vm in $vms) {
+            $vmid = $vm.vmid
+
+            # Get detailed info for each VM
+            $vmConfigUri = "https://192.168.1.100:8006/api2/json/nodes/$nodeName/qemu/$vmid/config"
+            $vmStatusUri = "https://192.168.1.100:8006/api2/json/nodes/$nodeName/qemu/$vmid/status/current"
+            $vmAgentUri = "https://192.168.1.100:8006/api2/json/nodes/$nodeName/qemu/$vmid/agent/get-osinfo"
+
+            try {
+                $vmConfigResponse = Invoke-RestMethod -URI $vmConfigUri -Headers $Headers -ContentType "application/json" -Method Get -WebSession $session
+                   $vminfo = $vmConfigResponse.data
+                   $vmname = $vmConfigResponse.data.name
+                   Write-Host $vmname
+                   $cpu=  $vmConfigResponse.data.cores        
+                   $sockets = $vmConfigResponse.data.sockets
+                   $cpucalc = $cpu * $sockets
+                   Write-Host $cpucalc
+                   $memory = $vmConfigResponse.data.memory
+                   Write-Host $memory
+
+
+                $storageNames = @()
+                $diskSizes = @()
+
+
+                   # Extract storage information using regex
+                foreach ($property in $vminfo.PSObject.Properties) {
+                    if ($property.Name -match '^(scsi|sata|ide)') {
+                        $diskInfo = $property.Value
+                        if ($diskInfo -match '(.+):(.+),size=(\d+G?)') {
+                            $storageName = $matches[1]
+                            $diskSize = $matches[3]
+                            $storageNames += $storageName
+                            $diskSizes += $diskSize
+                        }
+                    }
+                }
+                      # Display storage info with size and name
+                for ($i = 0; $i -lt $storageNames.Count; $i++) {
+                    Write-Host "Storage Name: $($storageNames[$i]), Size: $($diskSizes[$i])"
+                }
+                
+                Write-Host "Hostname: $nodeName"
+
+
+            
+            } catch {
+
+                    Write-Host "vmConfigResponse line is broken"
+
+            }
+
+
+            try {
+
+                $vmStatusResponse = Invoke-RestMethod -URI $vmStatusUri -Headers $Headers -ContentType "application/json" -Method Get -WebSession $session
+                $vmstatus = $vmStatusResponse.data.qmpstatus
+                Write-Host $vmstatus
+            
+            } catch {
+
+                    Write-Host "vmStatusResponse line is broken"
+
+            }
+
+
+            try {
+
+                $vmAgentResponse = Invoke-RestMethod -URI $vmAgentUri -Headers $Headers -ContentType "application/json" -Method Get -WebSession $session
+                $vmAgent = $vmAgentResponse.data.result
+                Write-Host $vm
+            
+            } catch {
+
+                    Write-Host "vmAgentResponse line is broken"
+            }
+
+
+
+
+        }
+    } catch {
+        Write-Error "Failed to retrieve VMs for node $nodeName. Error: $_"
+    }
